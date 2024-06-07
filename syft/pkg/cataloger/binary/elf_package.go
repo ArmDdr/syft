@@ -24,6 +24,7 @@ func newELFPackage(metadata elfBinaryPackageNotes, locations file.LocationSet) p
 
 func packageURL(metadata elfBinaryPackageNotes) string {
 	// TODO: what if the System value is not set?
+	// TODO: this should respond to the type field in the metadata... fallback to system
 	return packageurl.NewPackageURL(
 		packageurl.TypeGeneric,
 		metadata.System,

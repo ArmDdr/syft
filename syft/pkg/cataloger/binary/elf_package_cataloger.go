@@ -1,8 +1,10 @@
 package binary
 
 import (
+	"bytes"
 	"context"
 	"debug/elf"
+	"encoding/binary"
 	"encoding/json"
 	"fmt"
 
@@ -154,11 +156,47 @@ func getELFNotes(r file.LocationReadCloser) (*elfBinaryPackageNotes, error) {
 		return nil, err
 	}
 
-	var metadata elfBinaryPackageNotes
-	if err := json.Unmarshal(notes, &metadata); err != nil {
-		log.WithFields("file", r.Location.Path(), "error", err).Trace("unable to unmarshal ELF package notes as JSON")
+	if len(notes) == 0 {
 		return nil, nil
 	}
 
-	return &metadata, err
+	{
+		var metadata elfBinaryPackageNotes
+		if err := json.Unmarshal(notes, &metadata); err == nil {
+			return &metadata, nil
+		}
+	}
+
+	{
+		var header elfSectionHeader
+		headerSize := binary.Size(header) / 4
+		if len(notes) > headerSize {
+			var metadata elfBinaryPackageNotes
+			newPayload := bytes.TrimRight(notes[headerSize:], "\x00")
+			if err := json.Unmarshal(newPayload, &metadata); err == nil {
+				return &metadata, nil
+			}
+
+			// TODO: figure the PURL from the type/OS/OSCPE fields + optional versions
+			// if not found leave namespace blank
+
+			log.WithFields("file", r.Location.Path(), "error", err).Trace("unable to unmarshal ELF package notes as JSON")
+		}
+	}
+
+	return nil, err
+}
+
+// TODO: is there 64 bit vs 32 bit to worry about here?
+type elfSectionHeader struct {
+	ShName      uint32
+	ShType      uint32
+	ShFlags     uint64
+	ShAddr      uint64
+	ShOffset    uint64
+	ShSize      uint64
+	ShLink      uint32
+	ShInfo      uint32
+	ShAddralign uint64
+	ShEntsize   uint64
 }
